@@ -4,49 +4,49 @@ import sys
 from pwn import *
 
 def def_handler(sig, frame):
-    log.warning("Saliendo...")
+    log.warning("Exiting...")
     sys.exit(1)
 
 # Ctrl+c
 signal.signal(signal.SIGINT, def_handler)
 
 def send_request(host, request, port=80):
-    # Crea un socket TCP
+    # Create TCP socket
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    # Conecta al host y puerto especificado
+    # Connection
     s.connect((host, port))
 
-    # Envía el request
+    # Send the request
     s.sendall(request.encode())
 
-    # Recibe y muestra la respuesta
+    # Receive the response
     response = s.recv(4096)
     
-    # Cierra el socket
+    # Close socket
     s.close()
 
     return response.decode()
 
 def send_request_with_ssl(host, request, port=443):
-    # Crea un socket TCP
+    # Create TCP socket
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    # Establece un tiempo de espera (timeout) para la función s.recv()
-    s.settimeout(10)  # 10 segundos de timeout
+    # Set timeout to receive 
+    s.settimeout(10)  # 10 seconds
 
-    # Conexión SSL
+    # SSL Connection
     context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
     s = context.wrap_socket(s, server_hostname=host)
 
     try:
-        # Conecta al host y puerto especificado
+        # Connection
         s.connect((host, port))
-        # Envía el request
+        # Send the request
         s.sendall(request.encode())
-        # Recibe y muestra la respuesta
+        # Receive the response
         response = s.recv(4096)
-        # Cierra el socket
+        # Close socket
         s.close()
         return response.decode()
     except Exception as e:
@@ -65,6 +65,10 @@ GET /error HTTP/1.1\r
 Foo: x\r
 \r
 '''
+
+    # Clean the queue
+    clean_queue(host,p)
+
     p.status("CL.TE [0/2]")
     first = send_request_with_ssl(host, request)
     p.status("CL.TE [1/2]")
@@ -91,6 +95,10 @@ x=1\r
 0\r
 \r
 '''
+    
+    # Clean the queue
+    clean_queue(host,p)
+
     p.status("TE.CL [0/2]")
     first = send_request_with_ssl(host, request)
     p.status("TE.CL [1/2]")
@@ -101,7 +109,16 @@ x=1\r
     else:
         log.info("Not seem to be vulnerable to TE.CL")
 
-
+def clean_queue(host,p,n=5):
+    request = f'''GET / HTTP/1.1\r
+Host: {host}\r
+0\r
+\r
+'''
+    p.status("Cleaning queue")
+    for i in range(n):
+        p.status(f"Cleaning queue {i}/{n}")
+        request = send_request_with_ssl(host, request)
 
 if __name__ == '__main__':
     if(len(sys.argv) != 2):
@@ -110,6 +127,6 @@ if __name__ == '__main__':
 
     host = sys.argv[1]
     log.info("Host: " + host)
-    p = log.progress("Fase")
+    p = log.progress("Stage")
     cl_te_detector(host, p)
     te_cl_detector(host, p)
